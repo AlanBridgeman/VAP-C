@@ -1,0 +1,50 @@
+# More GitHub Actions for Azure: https://github.com/Azure/actions
+
+name: Build and deploy Next.js app to Azure Container Instance (ACI)
+
+on:
+  push:
+    branches:
+      - "main"
+    paths:
+      - "src/**"
+  workflow_dispatch:
+
+env:
+  CONTAINER_NAME: 'webapp'                          # The last part of the container name (and the name of the ACI instance)
+  REGISTRY_LOGIN_SERVER: 'videoscriptcr.azurecr.io' # The Azure Continer Repositoy (ACR) URL - may make a secret in future
+  RESOURCE_GROUP: 'video-script-project'            # The used Azure Resource Group - may make a secret in future
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - name: 'Checkout GitHub Action'
+      uses: actions/checkout@v2
+
+    - name: 'Login via Azure CLI'
+      uses: Azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    - name: 'Build and push image'
+      uses: Azure/docker-login@v1
+      with: 
+        login-server: ${{ env.REGISTRY_LOGIN_SERVER }}
+        username: ${{ secrets.REGISTRY_USERNAME }}
+        password: ${{ secrets.REGISTRY_PASSWORD }}
+    - run: |
+        docker build . -t ${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.CONTAINER_NAME }}:${{ github.sha }}
+        docker push ${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.CONTAINER_NAME }}:${{ github.sha }}
+    
+    - name: 'Deploy to Azure Container Instances'
+      uses: Azure/aci-deploy@v1
+      with:
+        resource-group: ${{ env.RESOURCE_GROUP }}
+        dns-name-label: ${{ env.RESOURCE_GROUP }}${{ github.run_number }}
+        image: ${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.CONTAINER_NAME }}:${{ github.sha }}
+        registry-login-server: ${{ env.RGISTRY_LOGIN_SERVER }}
+        registry-username: ${{ secrets.REGISTRY_USERNAME }}
+        registry-password: ${{ secrets.REGISTRY_PASSWORD }}
+        name: ${{ env.CONTAINER_NAME }}
+        location: 'central canada'
