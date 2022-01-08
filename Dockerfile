@@ -1,11 +1,11 @@
 FROM node:lts as dependencies
 WORKDIR /video_automation_front-end
-COPY video_automation_front-end/package.json video_automation_front-end/yarn.lock ./
+COPY src/package.json src/yarn.lock ./
 RUN yarn install --frozen-lockfile
 
 FROM node:lts as builder
 WORKDIR /video_automation_front-end
-COPY video_automation_front-end/. .
+COPY src/. .
 COPY --from=dependencies /video_automation_front-end/node_modules ./node_modules
 RUN yarn build
 
