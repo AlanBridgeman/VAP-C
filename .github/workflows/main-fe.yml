@@ -46,5 +46,6 @@ jobs:
         registry-login-server: ${{ env.RGISTRY_LOGIN_SERVER }}
         registry-username: ${{ secrets.REGISTRY_USERNAME }}
         registry-password: ${{ secrets.REGISTRY_PASSWORD }}
+        ports: 3000
         name: ${{ env.CONTAINER_NAME }}
         location: 'canadacentral'
