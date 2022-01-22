@@ -1,2 +1,3 @@
+*.publishsettings
 .DS_STORE
 temp-fix.sh

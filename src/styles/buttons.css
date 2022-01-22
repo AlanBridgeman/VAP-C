@@ -1,0 +1,29 @@
+.btn-primary {
+    color: black;
+    background-color: white;
+}
+.btn-primary:hover,
+.btn-primary:focus {
+    box-shadow: inset 0 0 0 2px #005500;
+    background-color: #009900;
+    border-color: #007700;
+}
+
+.btn-outline-secondary.btn-circle {
+    color: #005500;
+    border: #007700;
+}
+.btn-circle {
+    width: 17px;
+    height: 17px;
+    bottom: 5px;
+    padding: 0px 0px;
+    border-radius: 15px;
+    text-align: center;
+    font-size: 12px;
+    line-height: 1.42857;
+}
+.btn-circle:focus {
+    box-shadow: none;
+    color: #FFF;
+}

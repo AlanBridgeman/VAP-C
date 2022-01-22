@@ -1,0 +1,29 @@
+.gpg5s { /* Stands for Green Primary, Grey (specifically #555555 hence 5) Secondary */
+    --fa-primary-color: green;
+    --fa-secondary-color: #555555;
+}
+.gpg5si { /* ^^ inverse */
+    --fa-primary-color: #555555;
+    --fa-secondary-color: green;
+}
+
+.gpgs { /* Stands for Green Primary, Grey Secondary */
+    --fa-primary-color: green;
+    --fa-secondary-color: grey;
+}
+
+.gpbs { /* Stands for Green Primary, Black Secondary */
+    --fa-primary-color: green;
+    --fa-secondary-color: black;
+}
+.gpbsi {/* ^^ inverse */
+    --fa-primary-color: black;
+    --fa-secondary-color: green;
+}
+
+.gso { /* Stands for Green Secondary ONLY */
+    --fa-secondary-color: green;
+}
+.g5so {/* Stands for Grey (specifically #555555) Secondary ONLY */
+    --fa-secondary-color: #555555;
+}

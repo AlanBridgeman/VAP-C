@@ -1,8 +1,10 @@
 .container {
   padding: 0 2rem;
+  max-width: 100%;
 }
 
 .main {
+  max-width: 100%;
   min-height: 100vh;
   padding: 4rem 0;
   flex: 1;
@@ -45,7 +47,14 @@
   font-size: 4rem;
 }
 
+.subtitle {
+  margin: 0;
+  line-height: 1;
+  font-size: 2rem;
+}
+
 .title,
+.subtitle,
 .description {
   text-align: center;
 }
