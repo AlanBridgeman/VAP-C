@@ -1,0 +1,104 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Connection to Azure SQL
+datasource db {
+  provider          = "sqlserver"
+  url               = env("DATABASE_URL")
+  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
+}
+
+// An individual user of the website/system
+// NOTE: Will use Account.id as Partition Key and id as Row Key in Azure Table Storage for properties document
+model User {
+    id          Int                      @id @default(autoincrement())                                                                                // A unique identifier to identify the user
+    email       String                   @unique                                                                                                      // The user's email address
+    password    String                                                                                                                                // The account password
+    salt        String                                                                                                                                // The password salt
+    services    AccessToServices[]       @relation(name: "has access to")                                                                             // The services the user has access to individually
+    aId         Int                                                                                                                                   // The ID of the account this user is associated with
+    account     Account                  @relation(name: "user in", fields: [aId], references: [id], onUpdate: Cascade, onDelete: Cascade)            // The account to which this user belongs
+    permissions UserPermissions[]        @relation(name: "has a permission of")                                                                       // The permissions on the account this user has
+}
+
+// An account on the website/system which would contain a or multiple users
+model Account { 
+    id          Int                    @id @default(autoincrement())                                                                                  // The unique identifier for the account
+    name        String                 @unique                                                                                                        // The name associated with the account
+    permissions AccountPermission[]    @relation(name: "is a permission within")                                                                      // The permissions configured in the account
+    users       User[]                 @relation(name: "user in")                                                                                     // Users in the account
+    services    AccessToServices[]     @relation(name: "all have access to")                                                                          // The set of services provided at the account level
+}
+
+// Permissions under an account
+// NOTE: Will use the Acount.Id as the Partition Key and id as the Row Key in Azure Table storage to actually store the rights definitions
+model AccountPermission {
+    id          Int                     @id @default(autoincrement())                                                                                 // A unique identifier to identify the permission
+    name        String                                                                                                                                // The name of the permission (to display for ease of use)
+    aId         Int                                                                                                                                   // The ID of the account to which this permission is for
+    account     Account                 @relation(name: "is a permission within", fields: [aId], references: [id])                                    // The Account object itself to which this permission is for
+    users       UserPermissions[]       @relation(name: "has the permission")                                                                         // The Users that have the permission represented by this row
+}
+
+// Forms the relationship between Permissions and Users on an Account
+model UserPermissions {
+    uId         Int                                                                                                                                   // The unique identifier of the user associated with this row
+    user        User                   @relation(name: "has a permission of", fields: [uId], references: [id])                                        // The user associated with this row
+    pId         Int                                                                                                                                   // The unique identifier of the permission associated with this row
+    permission  AccountPermission      @relation(name: "has the permission", fields: [pId], references: [id], onUpdate: NoAction, onDelete: NoAction) // The permission associated with this row
+    assigned    DateTime               @default(now())                                                                                                // When the permission was assigned
+    active      Boolean                                                                                                                               // Wheither the permission is currently active
+    @@id([uId, pId])
+}
+
+// Provides the container in which a new service access is requested/provisioned
+model Order {
+    id       Int                    @id @default(autoincrement())                                                                                     // The unique identifier of the order
+    accesses AccessToServices[]                                                                                                                       // The service access(es) associated with this order
+    placed   DateTime               @default(now())                                                                                                   // When the order was placed
+    paid     DateTime               @default(now())                                                                                                   // When the order was paid
+    total    Float                                                                                                                                    // The total amount billed/paid
+}
+
+// Mapping access to a given service via a User or Account ID, a Service ID and an Order ID
+model AccessToServices {
+    uId        Int?                                                                                                                                   // The ID of the User that gets access (if applicable to an individual user)
+    user       User?                @relation(name: "has access to", fields: [uId], references: [id], onUpdate: NoAction, onDelete: NoAction)         // The User that gets access (if applicable to an individual user)
+    aId        Int?                                                                                                                                   // The ID of the Account that gets access (if applicable to an entire account)
+    account    Account?             @relation(name: "all have access to", fields: [aId], references: [id])                                            // The Account that gets access (if applicable to an entire account)
+    sId        Int                                                                                                                                    // The ID of the service to which this record gives access to
+    service    Service              @relation(name: "those with access", fields: [sId], references: [id])                                             // The Service to which this record gives access to
+    oId        Int                                                                                                                                    // The ID of the order in which this access was gained
+    order      Order                @relation(fields: [oId], references: [id])                                                                        // The Order under which access was granted
+    units      String?                                                                                                                                // The units for quota based
+    used       Int?                                                                                                                                   // The amount used for quota based
+    max        Int?                                                                                                                                   // The maximum amount allowed for quota based
+    activated  Boolean              @default(false)                                                                                                   // Whether the service has been activated
+    activeDate DateTime?                                                                                                                              // The time/date the service was activated
+    type       Int                                                                                                                                    // The type of the service (ex. for Org/Account or for individual user, etc...)
+    expiry     DateTime?                                                                                                                              // The time/date at which point it will expire
+    @@id([sId, oId])           
+}
+
+// The services offered
+model Service {
+    id          Int                 @id @default(autoincrement())                                                                                     // The unique identifier of the service
+    name        String                                                                                                                                // The human readable name of the service
+    shortDesc   String                                                                                                                                // The short description used at checkout on list pages, etc...
+    LongDesc    String?                                                                                                                               // The loger description providing more detail about exactly what's offered
+    prices      Price[]             @relation(name: "priced by")                                                                                      // The prices associated with this service
+    customers   AccessToServices[]  @relation(name: "those with access")                                                                              // The access records (users who have access to the service)
+}
+
+// The prices at which services are offered
+model Price {
+    id          Int                     @id @default(autoincrement())                                                                                 // A unique ID for this price instance
+    name        String?                                                                                                                               // An easily human readable name
+    value       Float                                                                                                                                 // The value this price represents
+    frequency   String?                                                                                                                               // The frequency at which to bill (if not one-time)
+    currency    String                  @default("CAD")                                                                                               // The currency to bill in (defaults to Canadian/CAD)
+    type        Int?                                                                                                                                  // The type of price this is
+    sId         Int                                                                                                                                   // The ID of the service this prices is associated with
+    service     Service                 @relation(name: "priced by", fields: [sId], references: [id])                                                 // The Service this price is associated with
+}

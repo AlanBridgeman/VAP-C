@@ -1,11 +1,11 @@
 # More GitHub Actions for Azure: https://github.com/Azure/actions
 
-name: '[PROD] alanbridgeman.ca Build and Deploy'
+name: '[PPE] alanbridgeman.ca Build and Deploy'
 
 on:
   push:
     branches:
-      - "main"
+      - "dev"
     paths:
       - "src/**"
   workflow_dispatch:
@@ -37,5 +37,5 @@ jobs:
       with:
         name: ${{ env.CONTAINER_NAME }}
         publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
-        slot: 'production'
+        slot: 'ppe'
         image: ${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.CONTAINER_NAME }}:${{ github.sha }}
