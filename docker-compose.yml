@@ -1,0 +1,257 @@
+#============================================================
+# Docker Compose file to make it easy to be able to setup a 
+# development enviroment with all the required emulators
+# 
+# Note, the table below provides information on the environment 
+# variables that need to be setup for this to properly function
+# 
+# | Environment Variable Name  | Description                                                                 |
+# |----------------------------|-----------------------------------------------------------------------------|
+# | FONTAWESOME_NPM_AUTH_TOKEN | Font Awesome Pro NPM Token                                                  |
+# | USERNAME                   | User's username for main app container                                      |
+# | USER_PASSWDRD              | Main app containe's user's password                                         |
+# | AZURE_CLIENT_ID            | Azure app Client ID (used for auth to Azure)                                |
+# | AZURE_TENANT_ID            | Azure app Tenant ID (used for auth to Azure)                                |
+# | AZURE_CLIENT_SECRET        | Azure app Client Secret (used for auth to Azure)                            |
+# | CONTAINER_VOLUME           | The secondary app source folder (mount point on host)                       |
+# | APP_SRC_DIR                | Where within the container the app's source is put (container mount point)  |
+# | AZURITE_ACCOUNTS_STRING    | The accounts for Azurite to setup (see Azurite docs for info on format)     |
+# | AZURITE_DATA_DIR           | The folder/diretory on the host to hold Azurite data in                     |
+# | KEYVAULT_ACCOUNTS_STRING   | The accounts for Azure Key Vault mock (similar in format to Azureite)       |
+# | KEYVAULT_DATA_DIR          | The folder/directory on the host to hold Azure Key Vault moch data in       |
+# 
+# Author: Alan Bridgeman
+# Created: January 31, 2022
+#============================================================
+
+version: "3.7"
+services:
+  # The main app that is being run
+  # 
+  # Because we want the website service to always be deployed/run 
+  # we don't specify a `profiles` attribute
+  website:
+    build: 
+      # NOTE: Because we only use a docker-compose file for the 
+      #       development environment (becausee it requires 
+      #       multiple containers in contrast to local-test or 
+      #       prduction. Particularly of note is that local-test 
+      #       only requires a single container so can be run 
+      #       using a `run` command instead of a compose file. 
+      #       Production is handled almost entirly seperately) we cn 
+      #       use the Dockerfile path literal here
+      dockerfile: './Dockerfile.dev'
+      # Because we use code from a private Github repository 
+      # which we retrieve using SSH in Yarn we need to 
+      # mount the SSH keys inside the container
+      ssh:
+        - default
+      args:
+        # Because of the use of Font Awesome Pro packages in 
+        # packages.json (and the app) we need to setup the 
+        # appropraite NPM key so that we can access the private 
+        # repository
+        # 
+        # @See https://fontawesome.com/docs/web/setup/packages#_1-configure-access
+        FONTAWESOME_NPM_AUTH_TOKEN: '${FONTAWESOME_NPM_AUTH_TOKEN}'
+        # Mostly because we install Linuxbrew which won't work 
+        # while using root but also that using a non-root user 
+        # is considered a good practice these variables define 
+        # the user to use within the container
+        USERNAME: '${USERNAME}'
+        USER_PASSWORD: '${USER_PASSWORD}'
+        # Determins where the main app source code lives.
+        # 
+        # This is mostly used by the startup coce to know 
+        # where to put things and how to change between 
+        # working directories properly
+        APP_SRC_DIR: '${APP_SRC_DIR}'
+        # Because we're not authenticated to Azure by default 
+        # inside the container these environment variables help 
+        # authenticate using an app
+        AZURE_CLIENT_ID: '${AZURE_CLIENT_ID}'
+        AZURE_TENANT_ID: '${AZURE_TENANT_ID}'
+        AZURE_CLIENT_SECRET: '${AZURE_CLIENT_SECRET}'
+    image: dev-vap-c #alanbridgemanacr.azurecr.io/dev-alanbridgemenca
+    # NOTE: May in the future move to connecting through a nginx 
+    #       proxy on the host machine (on top of nginx proxy already 
+    #       run within the container) instead of using port mapping 
+    #       as is done here. This is because with an additional line to 
+    #       the /etc/hosts (or equivalent) file on the host and a proxy 
+    #       container running on port 80 (default HTTP port) or port 
+    #       443 (default HTTPS port) it's possible to "trick" some 
+    #       third-party sites/services that use protocols like OAuth 
+    #       2.0 etc... (where the client is reidrected back to the site) 
+    #       into being able to work with a "local" app even though they 
+    #       don't support a localhost redirct URL etc...
+    #       
+    #       Note, that if HTTPS is required for the redirect (on top of 
+    #       being non-localhost) it's likely a self-signed certificate 
+    #       would be generated and used because this only has to satisfy 
+    #       the host's web btrowser and not the third-party site/service
+    #       so, can use a self-signed certificate.
+    #       
+    #       Though keep in mind, that, this strategy only fixes things 
+    #       that are done client-side like redirects. it wouldn't work for 
+    #       things like webhooks, etc... where the connection originates 
+    #       from the server)
+    ports:
+      - 3000:3000
+    # Use an explicit container name so that it's easy to find and 
+    # manipulate using scripts
+    container_name: dev-vapc
+    # NOTE: In PPE/Production (CI/CD) the app's source files are 
+    #       **copied** into the container from the remote 
+    #       repository rather than the source being mounted as a 
+    #       volume. Consequently, it's important to note that the 
+    #       choice made here to mount the source as a volume 
+    #       constitutes a potentially significant 
+    #       deviation/difference between the development 
+    #       environment and the Production/PPE environments. 
+    #       Particularly because the mounted directory may/can 
+    #       contain files that are not tracked by source control 
+    #       (ex. a .env file) thus may have an effect on 
+    #       functionality but not be available in the CI/CD 
+    #       workflows for PPE/Production and could potentially 
+    #       lead to unexpected discrepencies when moving code 
+    #       forward in the applications's life-cycle.
+    #        
+    #       That said, the decision to use the mounting option 
+    #       here was based on being able to have as fast/agile a 
+    #       development workflow as possible. And specifically, 
+    #       that means being able to utilize tools, techniques 
+    #       and technologies (like hot-reloading) that 
+    #       can increase developer productivity. 
+    #       
+    #       All that said, with the introduction of automation 
+    #       scripts (that create Azure resources, or in the case 
+    #       of the development environment, create mock Azure 
+    #       resources) there exists an opportunity to attempt to 
+    #       merge these two approaches thereby making the 
+    #       development environment more representative of the 
+    #       PPE/Production environments while still providing 
+    #       needed flexibility to be able to use additional 
+    #       tools, techniques or technologies that accelerate 
+    #       developer productivity
+    #       
+    #       This approach uses the automation scripts to copy 
+    #       files from the applications's source folder into a 
+    #       secondary folder/directory that is then mounted 
+    #       into the container. This minimizes the difference 
+    #       between copying in the files and mounting them by 
+    #       virtue of this copy step being customizable to 
+    #       include/expclude certain iles
+    volumes:
+      - ${CONTAINER_VOLUME}:${APP_SRC_DIR}
+    # Dependencies are noted here so that they are startted 
+    # before this container
+    depends_on:
+      - azurite
+      - lowkey
+      - mgmt-mock
+  
+  # Azure Storage Emulator
+  #
+  # See: https://github.com/Azure/Azurite
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite
+    container_name: dev-vapc-azurite
+    hostname: azurite
+    restart: always
+    environment:
+      # Needed to setup "custom" storage accounts
+      # Used to be consistent with PPE/Production 
+      # rather than needing to use the development 
+      # account
+      AZURITE_ACCOUNTS: '${AZURITE_ACCOUNTS_STRING}'
+    ports:
+      - 10000:10000 # port 10000 will expose blob service's default listening port
+      - 10001:10001 # port 10001 will expose queue service's default listening port
+      - 10002:10002 # port 10002 will expose table service's default listening port
+    volumes:
+      - ${AZURITE_DATA_DIR}:/workspace
+    # The command is required to configure HTTPS
+    command: azurite --debug /workspace/debug.log --blobHost 0.0.0.0 --queueHost 0.0.0.0 --tableHost 0.0.0.0 --cert /workspace/127.0.0.1.pem --key /workspace/127.0.0.1-key.pem
+    # NOTE: Profiles is a Docker specific feature
+    #profiles:
+    #  - "Dev"
+  
+  # Azure Key Vault Emulator/Mock
+  #
+  # This is a custom implementation/homage of Lowkey Vault (https://github.com/nagyesta/lowkey-vault)
+  lowkey:
+    image: typescript_lowkey:latest
+    container_name: dev-vapc-keyvault
+    hostname: lowkey
+    environment:
+      # What Key Vault accounts to create
+      KEYVAULT_ACCOUNTS: '${KEYVAULT_ACCOUNTS_STRING}'
+    volumes:
+      - ${KEYVAULT_DATA_DIR}:/app/data
+    ports:
+      - 8070:8070
+    # NOTE: Profiles is a Docker specific feature
+    #profiles:
+    #  - "Dev"
+  
+  # Mock for Microsoft Graph and Azure Managment APIs
+  # 
+  # That is:
+  #    https://management.azure.com/
+  #    https://graph.microsoft.com/
+  mgmt-mock:
+    image: azure-mgmt-mock:latest
+    container_name: dev-vapc-azure-mgmt-mock
+    hostname: azure-mgmt-mock
+    ports:
+      - 8090:8090
+    # NOTE: Profiles is a Docker specific feature
+    #profiles:
+    #  - "Dev"
+  
+  #admin:
+  #  image: dev-sites-admin:latest
+  #  container_name: dev-vapc-admin
+  #  hostname: admin
+  #  ports:
+  #    - 8080:8080
+  #  volumes:
+  #    - ./logs:/app/logs
+  
+  # NOTE: current implementation doesn't utilize Redis cache however 
+  #       left here in case there is ever a desire to go back and 
+  #       investigate further integration in the future
+  # 
+  # Redis Server (Azure Cache for Redis Emulator)
+  #redis:
+  #  image: redis
+  #  container_name: dev-alanbridgemanca-redis
+  #  ports:
+  #    #- 6379: 6379
+  #    - 6380:6380
+  #  volumes:
+  #    - ./redis-data:/var/lib/redis
+
+  # NOTE: current implementation doesn't utilize this SQL Server data storage however 
+  #       left here in case there is ever a desire to go back and investigate further 
+  #       integration in the future
+  #
+  # SQL Server (Azure SQL Emulator)
+  # See: https://docs.microsoft.com/en-us/sql/linux/quickstart-install-connect-docker?view=sql-server-ver15&pivots=cs1-bash
+  #sqlserver:
+  #  image: mcr.microsoft.com/mssql/server
+  #  container_name: dev-alanbridgemanca-sqlserver
+  #  hostname: dev-alanbridgemanca-sqlserver
+  #  environment:
+  #    ACCEPT_EULA: 'Y'
+  #    # NOTE: specified in ./db/secrets.env so thar it's excluded from  GIT
+  #    SA_PASSWORD: '${DB_PASSWORD}'
+  #  volumes:
+  #    # Backup/Restore data within the container (data persists beyond a single container) 
+  #    - ./db/data:/var/opt/mssql/data
+  #    - ./db/log:/var/opt/mssql/log
+  #    - ./db/secrets:/var/opt/mssql/secrets
+  #  ports:
+  #    - 1433:1433
+  #  # Create database on startup
+  #  command: /bin/sh -c "(/opt/mssql/bin/sqlservr &) && sleep 10s && /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P \"${DB_PASSWORD}\" -d master -Q 'CREATE DATABASE dev-website' && sleep infinity"

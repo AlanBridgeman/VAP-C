@@ -1,3 +1,45 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+/.pnp
+.pnp.js
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Prisma
+prisma/*
+!prisma/schema.prisma
+
+# vercel
+.vercel
+
+# Assume anything with .local or .local. in the name (ex. .env.local or blah.local.sh, etc...) is meant to not be uploaded
+*.local
+*.local.*
+
+# Ignore Application Settings JSON as they contain secrets
+*.appsettings.json
+
+# Publish settings files (mostly from Azure)
 *.publishsettings
-.DS_STORE
-temp-fix.sh
+
+# Disregard exclusions if it ends with .example
+!*.example

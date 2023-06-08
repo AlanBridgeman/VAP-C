@@ -1,0 +1,123 @@
+FROM node:lts
+
+ARG ssh_prv_key
+ARG ssh_pub_key
+
+RUN apt-get update && \
+    apt-get install -y \
+        git \
+        openssh-client
+
+# Download public key for github.com
+RUN mkdir -p -m 0600 ~/.ssh && \
+    ssh-keyscan github.com >> ~/.ssh/known_hosts
+
+ARG APP_SRC_DIR
+ENV APP_SRC_DIR $APP_SRC_DIR
+
+WORKDIR $APP_SRC_DIR
+
+ARG FONTAWESOME_NPM_AUTH_TOKEN
+ENV FONTAWESOME_NPM_AUTH_TOKEN $FONTAWESOME_NPM_AUTH_TOKEN
+
+RUN apt-get update \
+    && apt-get install -y sudo
+
+# Get/Set the username variable (who the user to run the app under is)
+ARG USERNAME
+ENV USERNAME $USERNAME
+
+ARG USER_PASSWORD
+ENV USER_PASSWORD $USER_PASSWORD
+
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 "${USERNAME}" \
+    && echo "${USERNAME}:${USER_PASSWORD}" | chpasswd \
+    && adduser "${USERNAME}" sudo
+
+USER ${USERNAME}
+
+# Install SQLlite database'
+RUN echo "${USER_PASSWORD}" | sudo -S apt-get update \
+    && echo "${USER_PASSWORD}" | sudo -S apt-get install -y sqlite3 libsqlite3-dev
+RUN echo "${USER_PASSWORD}" | sudo -S mkdir /db \
+    && echo "${USER_PASSWORD}" | sudo -S chown nextjs:nodejs /db
+RUN /usr/bin/sqlite3 /db/test.db "VACUUM;"
+
+# Install NGINX for using as a reverse proxy for Azurite Storage Emulator
+RUN echo "${USER_PASSWORD}" | sudo -S apt-get update \
+    && echo "${USER_PASSWORD}" | sudo -S apt-get install -y nginx
+COPY dev-deploy/nginx.conf /etc/nginx/nginx.conf
+
+# SSL Certificate stuff
+COPY dev-deploy/azurite_data/127.0.0.1.pem /etc/nginx/client.pem
+COPY dev-deploy/azurite_data/127.0.0.1-key.pem /etc/nginx/client.key
+#COPY self-signed.conf /etc/nginx/snippets/self-signed.conf
+COPY dev-deploy/ssl-params.conf /etc/nginx/snippets/ssl-params.conf
+
+# Install mkcert (which includes installing homebrew)
+RUN echo "Installing mkcert and it's dependencies" \
+    # Create needed folder structure
+    && echo "${USER_PASSWORD}" | sudo -S mkdir /home/linuxbrew \
+    && echo "${USER_PASSWORD}" | sudo -S mkdir /home/linuxbrew/.linuxbrew \
+    && echo "${USER_PASSWORD}" | sudo -S chown -R "${USERNAME}:nogroup" /home/linuxbrew \
+    # Install Homebrew dependency: build-essential
+    && echo "${USER_PASSWORD}" | sudo -S apt-get update \
+    && echo "${USER_PASSWORD}" | sudo -S apt-get install -y build-essential \
+    # Install Homebrew
+    && /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" \
+    # Load Homebrew into PATH automatically
+    && touch "/home/${USERNAME}/.profile" \
+    && echo 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"' >> ~/.profile \
+    # Looad Homebrew into PATH for the current layer of the image (needed for mkcert install)
+    && eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)" \
+    # Install mkcert dependency: libnss3-tools
+    && echo "${USER_PASSWORD}" | sudo -S apt-get install -y libnss3-tools \
+    # Install mkcert
+    && echo "${USER_PASSWORD}" | brew install mkcert
+
+# Note, because sudo is used to execute some script (ex. hostnames.ts because it needs permissions to write to 
+# /etc/hosts) we need to add homebrew to the secure_path variable (on top of adding it to the path variable) 
+# which we do by adding a new file to the sudoers.d directory. This is so because it's easier than trying to 
+# sed/awk the sudoers file but also it means it wouldn't be blown away if someone choose to update sudoers 
+# etc...
+RUN echo "Adding Homebrew to secure_path..." \
+    && echo "${USER_PASSWORD}" | sudo -S touch add_linuxbrew \
+    && echo "${USER_PASSWORD}" | sudo -S chown "${USERNAME}:nogroup" add_linuxbrew \
+    && echo "Defaults  secure_path=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/home/linuxbrew/.linuxbrew/bin" > add_linuxbrew \
+    && echo "${USER_PASSWORD}" | sudo -S mv add_linuxbrew /etc/sudoers.d/add_linuxbrew \
+    && echo "${USER_PASSWORD}" | sudo -S chown "root:nogroup" /etc/sudoers.d/add_linuxbrew \
+    && echo "${USER_PASSWORD}" | sudo -S cat /etc/sudoers.d/add_linuxbrew
+
+USER root
+
+# Copy over startup code and make it executable
+#COPY startup/. /startup/
+#RUN echo "${NEXTJS_PASSWORD}" | sudo -S chmod +x /startup/init.dev.sh
+RUN --mount=type=ssh mkdir /startup \
+    && cd /startup \
+    && yarn add git+ssh://git@github.com:AlanBridgeman/alanbridgeman.ca-app_init.git --force \
+    && echo "Force no cache: 7"
+
+USER ${USERNAME}
+
+# Copy in and setup an environment variable for the Azure resources description JSON file
+RUN echo "${USER_PASSWORD}" | sudo -S mkdir /startup/data
+COPY dev-deploy/data/resources.dev.json /startup/data/resources.dev.json
+ENV RESOURCES_FILE "/startup/data/resources.dev.json"
+COPY dev-deploy/data/secrets.json /startup/data/secrets.json
+ENV SECRETS_FILE "/startup/data/secrets.json"
+COPY dev-deploy/data/envs.json /startup/data/envs.json
+ENV ENVS_FILE "/startup/data/envs.json"
+COPY dev-deploy/data/temp-storage-accounts.json /startup/data/storage-accounts.json
+ENV STORAGE_ACCOUNTS_FILE "/startup/data/storage-accounts.json"
+
+ARG AZURE_CLIENT_ID
+ENV AZURE_CLIENT_ID ${AZURE_CLIENT_ID}
+ARG AZURE_TENANT_ID
+ENV AZURE_TENANT_ID ${AZURE_TENANT_ID}
+ARG AZURE_CLIENT_SECRET
+ENV AZURE_CLIENT_SECRET ${AZURE_CLIENT_SECRET}}
+
+EXPOSE 3000
+CMD ["yarn", "start-dev"]
