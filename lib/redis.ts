@@ -39,8 +39,8 @@ export async function startRedisConnection() {
         // here otherwise ```yarn build``` in the Github Actions workflow
         // doesn't work because for whatever reason it doesn't see 
         // environment variables properly (or something...)
-        const redisHost = /*process.env.REDIS_CACHE_HOSTNAME;*/ 'ppe-alanbridgeman-ca.redis.cache.windows.net';
-        const redisPassword = /*process.env.REDIS_CACHE_KEY;*/ 'uXS6ciBMdFNlCDv8mC3Snje1wdtItzkgZAzCaHvsapo=';
+        const redisHost = process.env.REDIS_CACHE_HOSTNAME;
+        const redisPassword = process.env.REDIS_CACHE_KEY;
         
         redisClient = createClient({socket: {host: redisHost, port: 6380, tls: true}, password: redisPassword });
         redisClient.on('error', (err) => console.log('Redis Client Error', err));
